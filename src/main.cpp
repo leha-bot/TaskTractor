@@ -24,7 +24,7 @@ struct std::is_arithmetic<BigInt> {
 */
 
 template <typename CoordUnitT>
-struct UnitPoint {
+struct UnitPointT {
 	CoordUnitT x;
 	CoordUnitT y;
 };
@@ -56,7 +56,7 @@ template <typename CoordUnitT,
 	typename AngleDegreesT>
 class BicycleT {
 public:
-	typedef UnitPoint<CoordUnitT> UnitPointT;
+	typedef UnitPointT<CoordUnitT> UnitPoint;
 	typedef CoordUnitT CoordUnit;
 	typedef TimeUnitT TimeUnit;
 	typedef AngleDegreesT AngleDegrees;
@@ -66,12 +66,15 @@ public:
 	virtual void setSpeed(const CoordUnitT &units) = 0;
 	virtual void modifySpeed(const CoordUnitT &delta) = 0;
 	virtual void modifyFrontWheelRotation(const AngleDegreesT &delta) = 0;
-	virtual const CoordUnitT getSpeed() = 0;
-	virtual const AngleDegreesT getFrontWheelRotation() = 0;
-//	template<typename U = Coords>
-	virtual void getFrontWheelCoords(UnitPointT &pt) = 0;
-//	template<typename U = Coords>
-	virtual void getRearWheelCoords(UnitPointT &pt) = 0;
+
+	// Getters.
+
+	virtual const CoordUnitT getSpeed() = 0;  // v
+	virtual const CoordUnitT getLength() = 0; // L
+	virtual const AngleDegreesT getFrontWheelRotation() = 0; // delta
+	virtual const AngleDegreesT getVehicleRotation() = 0; // phi
+	virtual void getFrontWheelCoords(UnitPoint &pt) = 0; // { Xf, Yf }
+	virtual void getRearWheelCoords(UnitPoint &pt) = 0;  // { X , Y  }
 };
 
 class BicycleInterface: public BicycleT<float, float, float> {
@@ -79,8 +82,10 @@ class BicycleInterface: public BicycleT<float, float, float> {
 };
 
 class SimpleBicycle : public BicycleInterface {
-	
-	float x, y, speed;
+protected:
+	float x, y;
+private:
+	float speed;
 	float angle_rads;
 	float angle_degs;
 	
@@ -155,10 +160,10 @@ public:
 
 	virtual const float getFrontWheelRotation() override
 	{
-		return rads_to_degs(angle_rads);
+		return angle_degs;
 	}
 
-	virtual void getFrontWheelCoords(UnitPointT &pt) override
+	virtual void getRearWheelCoords(UnitPoint &pt) override
 	{
 		pt.x = x;
 		pt.y = y;
@@ -167,9 +172,9 @@ public:
 	/*
 	@note Assume that this bicycle is actually unicycle.
 	*/
-	virtual void getRearWheelCoords(UnitPointT &pt) override
+	virtual void getFrontWheelCoords(UnitPoint &pt) override
 	{
-		getFrontWheelCoords(pt);
+		getRearWheelCoords(pt);
 	}
 
 	virtual void modifySpeed(const CoordUnit &delta) override
@@ -181,6 +186,67 @@ public:
 	virtual void modifyFrontWheelRotation(const AngleDegrees &delta) override
 	{
 		setFrontWheelRotation(angle_degs + delta);
+	}
+
+	virtual const float getLength() override
+	{
+		return 0.0f;
+	}
+
+	virtual const float getVehicleRotation() override
+	{
+		return getFrontWheelRotation();
+	}
+
+protected:
+	const float getFrontWheelRotationRads()
+	{
+		return angle_rads;
+	}
+};
+
+class LengthBicycle : public SimpleBicycle {
+	CoordUnit length;
+	float vehicle_angle_rads;
+public:
+	LengthBicycle(const CoordUnit& len) 
+		: length(len)
+	{
+		vehicle_angle_rads = 0;
+	}
+
+
+
+
+	virtual void getFrontWheelCoords(UnitPoint &pt) override
+	{
+		getRearWheelCoords(pt);
+
+		pt.x += this->length * cos(this->vehicle_angle_rads);
+		pt.y += this->length * sin(this->vehicle_angle_rads);		
+	}
+
+
+	virtual void advance(const TimeUnit &units) override
+	{
+		float speed = getSpeed();
+		float angle_fr = getFrontWheelRotationRads();
+		float ds = speed * units;
+
+		x += ds * cos(vehicle_angle_rads);
+		y += ds * sin(vehicle_angle_rads);
+		vehicle_angle_rads += tan(angle_fr) / length * ds;
+	}
+
+
+	virtual const CoordUnit getLength() override
+	{
+		return length;
+	}
+
+	virtual const AngleDegrees getVehicleRotation() override
+	{
+		return rads_to_degs(vehicle_angle_rads);
 	}
 
 };
@@ -199,12 +265,18 @@ public:
 	virtual void notify(const std::shared_ptr<BicycleInterface> &sim, const char *tag,
 		const Time &simTime, const Time &delta) override
 	{
-		BicycleInterface::UnitPointT pt;
+		BicycleInterface::UnitPoint pt;
+		sim->getRearWheelCoords(pt);
+		std::cout << "" << tag;
+		std::cout << ": time: " << simTime << "(" << delta << ")";
+		std::cout << ";pos (rear): x: " << pt.x << ", y: " << pt.y;
+		std::cout << "; speed: " << sim->getSpeed();
 		sim->getFrontWheelCoords(pt);
-		std::cout << "SimLog: Tag " << tag;
-		std::cout << "; Time: " << simTime << "(" << delta << ")";
-		std::cout << "Bicycle pos: x: " << pt.x << ", y: " << pt.y
-			<< "; angle: " << sim->getFrontWheelRotation() << std::endl;
+		std::cout << "; Front pos: x: " << pt.x << ", y: " << pt.y;
+		std::cout << "; front angle: " << sim->getFrontWheelRotation()
+			<< "; vehicle angle: " << sim->getVehicleRotation()
+			<< "; Len: " << sim->getLength()
+			<< ";" << std::endl;
 	}
 
 };
@@ -239,21 +311,27 @@ class Simulation {
 	typedef std::shared_ptr<SimulationObserver> ObserverPtr;
 public:
 	typedef BicycleInterface::TimeUnit Time;
-//	typedef BicycleInterface::setFrontWheelRotation()
+	typedef BicycleInterface::CoordUnit Speed;
+	typedef BicycleInterface::CoordUnit Length;
+	typedef BicycleInterface::AngleDegrees AngleDegrees;
 
 private:
 	Time stepTime;
-	Time stepAngle;
-	Time stepSpeed;
+	AngleDegrees stepAngle;
+	Speed stepSpeed;
 	Time simulationTime;
+	const char *name;
 public:
 
-	Simulation(const Time &simStep, const float &angleStep, const Time &speedStep)
+	Simulation(const Time &simStep, const AngleDegrees &angleStep,
+		const Speed &speedStep, const Length length = 0.0f)
 	{
 		ObserverPtr simLogPtr = std::make_shared<InfoLog>();
 
 		observers.add(simLogPtr);
-		simulated = std::make_shared<SimpleBicycle>();
+		simulated = length == 0 ? std::make_shared<SimpleBicycle>()
+			: std::make_shared<LengthBicycle>(length);
+		name = length == 0 ? "SimpleBicycle" : "LengthBicycle";
 		stepTime = simStep;
 		stepSpeed = speedStep;
 		stepAngle = angleStep;
@@ -269,7 +347,7 @@ public:
 	{
 		simulated->advance(step);
 		simulationTime += step;
-		observers.notify(simulated, "SimpleBicycle", simulationTime, step);
+		observers.notify(simulated, name, simulationTime, step);
 	}
 
 	void turnLeft()
@@ -293,24 +371,10 @@ public:
 	}
 };
 
-//template <typename Unit, typename /*= std::enable_if< std::is_arithmetic<Unit>::value >::type */>
-//Bicycle<Unit>::Bicycle(const Unit &length)
-//{
-//	this->length = length;
-//}
-
 int main(int argc, char *argv[])
 {
-	/*static_assert(std::is_fundamental<BigInt>::value, "fuck");
-	static_assert(std::is_compound<BigInt>::value, "fuck");
-	static_assert(std::is_class<BigInt>::value, "fuck");
-*/
-	// test
-	// int length = 10;
-	SimpleBicycle byc;
-	Simulation sim(10.0f, 2.0f, 0.1f);
+	Simulation sim(10.0f, 2.0f, 0.1f, 10.0);
 	bool flag = true;
-	// int a = 0;
 	char c;
 
 	while (flag) {
@@ -331,6 +395,7 @@ int main(int argc, char *argv[])
 			break;
 		case 'e':
 			break;
+		case 'q':
 		default:
 			flag = false;
 		}
