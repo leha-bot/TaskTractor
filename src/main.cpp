@@ -1,7 +1,70 @@
-/** @file main.cpp Contains entry point for Traktor Simulation program using 
+/** @file main.cpp Contains entry point for Tractor Simulation program using 
  *  the Kinematic Bicycle Model.
  *  
+ * @mainpage Brief contents:
+ *
+ * SIMULATION MODEL
+ * ================
+ * The bicycle simulation logic is located in class SimpleBicycle (simplified 
+ * model of bicycle without length), LengthBicycle (with length and vehicle 
+ * angle which differs from front wheel angle (they're named 'delta' and 'Phi'
+ * in article "Automotive...". These classes are derived from template class 
+ * BicycleT<typename CoordUnitT, typename TimeUnitT, typename AngleDegreesT>, 
+ * located in file BicycleInterface.h. We use template parameters for the 
+ * ability to switch to another units with another semantics.
+ * SIMULATION CONTROLLER
+ * =====================
+ * This is a class Simulation, which encapsulates the simulated bicycle model and
+ * controls its behavior.
+ *
+ * Creating an instance of Simulation Controller
+ * ---------------------------------------------
+ * The Simulation instance is built via SimulationBuilder
+ * interface which have chained setter methods and abstract method 
+ * build(ObserverPtr uiView). The ObserverPtr is the 
+ * std::shared_ptr<SimulationObserver> which is notified by the controller if
+ * the simulation has been advanced. These ObserverPtr's are stored in the 
+ * class ObserverGroup which is derived from Observer and it notifies all its 
+ * children (a typical Composite Design Pattern implementation).
+ *
+ * Simulation controller logic
+ * ---------------------------
+ * The simulator controller has the Bicycle controlling methods:
+ * + accelerate, deccelerate - for *unconstrained* change the Bicycle speed;
+ * + turnLeft, turnRight - for *unconstrained* change the Bicycle front wheel
+ *   angle;
+ * + advance - for simulate the Bicycle movement with its parameters (speed, 
+ *   angle, etc). In fact, the controller calls the advance() method of Bicycle.
+ *
+ * Simulation Controller Types
+ * ---------------------------
+ * There are two controller types:
+ * + The 'active' simulation (class Simulation in this source) which accepts 
+ *   the control messages from View and changes the Bicycle parameters;
+ * + The 'file' simulation (class FileSimulation in FileSimulation.h/cpp, 
+ *   INCOMPLETE) - which reads lines from file on each advance() call and 
+ *   overrides the simulated model's parameters.
+ * 
+ * SIMULATION LOG
+ * ==============
+ * Simulation Log is the class InfoLog derived from SimulationObserver which
+ * has been notified while the controller advances the simulation.
+ *
+ * SIMULATION UI
+ * =============
+ * Simulation UI is derived from Observer and std::enable_shared_from_this
+ * for the ability to create the std::shared_ptr and store in Simulation's 
+ * ObserverGroup. The method loop() contains an input events loop.
+ *
+ * ConsoleSimulationUi controls
+ * ------------------
+ * + w, s - increase/decrease speed;
+ * + a, d - turn left/right;
+ * + e - advance simulation;
+ * + q - quit.
  */
+#include "SimulationInterface.h"
+#include "Units.h"
 #include <string>
 #include <type_traits>
 #include <limits>
@@ -9,77 +72,9 @@
 #include <memory>
 #include <iostream>
 #include <list>
-
-/** 
-
-struct BigInt {
-	int a;
-	int b;
-};
-
-template <>
-struct std::is_arithmetic<BigInt> {
-	static const bool value = true;
-};
-*/
-
-template <typename CoordUnitT>
-struct UnitPointT {
-	CoordUnitT x;
-	CoordUnitT y;
-};
-
-/*
-template <typename T>
-using enable_if_arithmetic = typename std::enable_if< std::is_arithmetic<T>::value, T >::type;
-*/
-
-template <typename Num >
-Num rads_to_degs(const Num& n)
-{
-	static const Num PI = 3.1415926535897932384626433832795;
-	return n / PI * 180.0f;
-}
-
-template <typename Num >
-Num degs_to_rads(const Num& n)
-{
-	static const Num PI = 3.1415926535897932384626433832795;
-	return n / 180.0f * PI;
-}
-
-/** @brief A template abstract class for all our simulated Bicycles.
- *
- */
-template <typename CoordUnitT, 
-	typename TimeUnitT,
-	typename AngleDegreesT>
-class BicycleT {
-public:
-	typedef UnitPointT<CoordUnitT> UnitPoint;
-	typedef CoordUnitT CoordUnit;
-	typedef TimeUnitT TimeUnit;
-	typedef AngleDegreesT AngleDegrees;
-
-	virtual void advance(const TimeUnitT &units) = 0;
-	virtual void setFrontWheelRotation(const AngleDegreesT &units) = 0;
-	virtual void setSpeed(const CoordUnitT &units) = 0;
-	virtual void modifySpeed(const CoordUnitT &delta) = 0;
-	virtual void modifyFrontWheelRotation(const AngleDegreesT &delta) = 0;
-
-	// Getters.
-
-	virtual const CoordUnitT getSpeed() = 0;  // v
-	virtual const CoordUnitT getLength() = 0; // L
-	virtual const AngleDegreesT getFrontWheelRotation() = 0; // delta
-	virtual const AngleDegreesT getVehicleRotation() = 0; // phi
-	virtual void getFrontWheelCoords(UnitPoint &pt) = 0; // { Xf, Yf }
-	virtual void getRearWheelCoords(UnitPoint &pt) = 0;  // { X , Y  }
-};
-
-class BicycleInterface: public BicycleT<float, float, float> {
-
-};
+#include "BicycleInterface.h"
+#include <condition_variable>
+#include <assert.h>
 
 class SimpleBicycle : public BicycleInterface {
 protected:
@@ -215,9 +210,6 @@ public:
 		vehicle_angle_rads = 0;
 	}
 
-
-
-
 	virtual void getFrontWheelCoords(UnitPoint &pt) override
 	{
 		getRearWheelCoords(pt);
@@ -251,13 +243,6 @@ public:
 
 };
 
-class SimulationObserver {
-public:
-	typedef BicycleInterface::TimeUnit Time;
-	virtual void notify(const std::shared_ptr<BicycleInterface> &sim, const char *tag,
-		const Time &simTime, const Time &delta) = 0;
-};
-
 class InfoLog : public SimulationObserver {
 public:
 	void log();
@@ -278,34 +263,81 @@ public:
 			<< "; Len: " << sim->getLength()
 			<< ";" << std::endl;
 	}
-
 };
 
-class SimulationObserverGroup : public SimulationObserver {
-	std::list<std::shared_ptr<SimulationObserver> > observers;
-
+/* @brief Constructs instances of SimulationInterface (defined by derived classes)
+  and BicycleInterface (defined by private member SimulationBuilder::type's value.
+*/
+class SimulationBuilder {
 public:
-	virtual void notify(const std::shared_ptr<BicycleInterface> &sim,
-		const char *tag, const Time &simTime,
-		const Time &delta) override
+	typedef BicycleInterface::CoordUnit CoordUnit;
+//	typedef BicycleInterface::CoordUnit CoordUnit;
+	typedef BicycleInterface::AngleDegrees AngleDegrees;
+	enum BicycleType {
+		Type_Simple,
+		Type_Length
+	};
+
+protected:
+	SimulationObserverGroup observers;
+
+	BicycleInterface::CoordUnit length;
+	BicycleInterface::CoordUnit speedStep;
+	BicycleInterface::AngleDegrees angleStep;
+	BicycleType type;
+
+	std::shared_ptr<BicycleInterface> makeBicycle()
 	{
-		for (auto iter : observers) {
-			iter->notify(sim, tag, simTime, delta);
-		}
+		return this->type == Type_Simple ?
+			std::make_shared<SimpleBicycle>() :
+			std::make_shared<LengthBicycle>(this->length);
+	}
+
+	const char *getBicycleTag()
+	{
+		return this->type == Type_Simple ?
+			"SimpleBicycle" :
+			"LengthBicycle";
+	}
+public:
+	SimulationBuilder()
+		:length(0), speedStep(0), angleStep(0), type(Type_Simple){}
+
+	SimulationBuilder &setBicycleLength(const CoordUnit &length)
+	{
+		this->length = length;
+		return *this;
+	}
+
+	SimulationBuilder &setBicycleType(BicycleType type)
+	{
+		this->type = type;
+		return *this;
 	}
 	
-	void add(std::shared_ptr<SimulationObserver> &observer)
+	SimulationBuilder &setSimulationSpeedStep(const CoordUnit &speedStep)
 	{
-		observers.push_back(observer);
+		this->speedStep = speedStep;
+		return *this;
 	}
 
-	void remove(const std::shared_ptr<SimulationObserver> &observer)
+	SimulationBuilder &setSimulationAngleStep(const CoordUnit &angleStep)
 	{
-		observers.remove(observer);
+		this->angleStep = angleStep;
+		return *this;
 	}
+
+	SimulationBuilder &addSimulationObserver(ObserverPtr ptr)
+	{
+		this->observers.add(ptr);
+		return *this;
+	}
+
+	virtual std::shared_ptr<SimulationInterface> buildSimulation(
+		std::shared_ptr<SimulationObserver> observerUi) = 0;
 };
 
-class Simulation {
+class Simulation : public SimulationInterface {
 	SimulationObserverGroup observers;
 	std::shared_ptr<BicycleInterface> simulated;
 	typedef std::shared_ptr<SimulationObserver> ObserverPtr;
@@ -321,21 +353,18 @@ private:
 	Speed stepSpeed;
 	Time simulationTime;
 	const char *name;
+
 public:
-
 	Simulation(const Time &simStep, const AngleDegrees &angleStep,
-		const Speed &speedStep, const Length length = 0.0f)
+		const Speed &speedStep, 
+		std::shared_ptr<BicycleInterface> simulated,
+		const char *simtag,
+		const SimulationObserverGroup &observers)
+		: observers(observers), simulated(simulated), 
+		stepTime(simStep), stepAngle(angleStep),
+		stepSpeed(speedStep),simulationTime(0.0),
+		name(simtag)
 	{
-		ObserverPtr simLogPtr = std::make_shared<InfoLog>();
-
-		observers.add(simLogPtr);
-		simulated = length == 0 ? std::make_shared<SimpleBicycle>()
-			: std::make_shared<LengthBicycle>(length);
-		name = length == 0 ? "SimpleBicycle" : "LengthBicycle";
-		stepTime = simStep;
-		stepSpeed = speedStep;
-		stepAngle = angleStep;
-		simulationTime = 0.0;
 	}
 
 	void advance()
@@ -371,35 +400,120 @@ public:
 	}
 };
 
-int main(int argc, char *argv[])
-{
-	Simulation sim(10.0f, 2.0f, 0.1f, 10.0);
-	bool flag = true;
-	char c;
 
-	while (flag) {
-		sim.advance();
-		std::cin >> c;
-		switch (c) {
-		case 'w':
-			sim.accelerate();
-			break;
-		case 's':
-			sim.deccelerate();
-			break;
-		case 'a':
-			sim.turnLeft();
-			break;
-		case 'd':
-			sim.turnRight();
-			break;
-		case 'e':
-			break;
-		case 'q':
-		default:
-			flag = false;
+class StepSimulationBuilder : public SimulationBuilder {
+
+public:
+	virtual std::shared_ptr<SimulationInterface> buildSimulation(
+		std::shared_ptr<SimulationObserver> observerUi) override
+	{
+		this->observers.add(observerUi);
+		/*
+		const Time &simStep, const AngleDegrees &angleStep,
+		const Speed &speedStep,
+		std::shared_ptr<BicycleInterface> simulated,
+		const char *simtag,
+		const SimulationObserverGroup &observers
+		*/
+		return std::make_shared<Simulation>(0.05f,
+			this->angleStep,
+			this->speedStep,
+			this->makeBicycle(), this->getBicycleTag(),
+			this->observers);
+	}
+};
+
+/** @todo It will be the base class for different UI implementations.
+ *
+*/
+class SimulationUi : public SimulationObserver {
+
+public:
+	virtual void notify(const std::shared_ptr<BicycleInterface> &sim,
+		const char *tag, const Time &simTime, const Time &delta) = 0;
+};
+
+class ConsoleSimulationUi : public SimulationObserver,
+public std::enable_shared_from_this<ConsoleSimulationUi> {
+	std::shared_ptr<SimulationInterface> sim;
+	std::shared_ptr<SimulationBuilder> builder;
+	// std::condition_variable var;
+	bool quit;
+public:
+	ConsoleSimulationUi(std::shared_ptr<SimulationBuilder> builder)
+		: builder(builder), quit(false)
+	{
+	}
+
+	virtual void notify(const std::shared_ptr<BicycleInterface> &sim,
+		const char *tag, const Time &simTime, const Time &delta) override
+	{
+	}
+
+	void loop()
+	{
+		char c;
+		ObserverPtr obs = 
+			std::static_pointer_cast<SimulationObserver>(this->shared_from_this());
+		std::cout << "ConsoleUi usage: \n w<Enter> - accelerate;\n"
+			" s<Enter> - deccelerate;\n a<Enter> - turn left;\n"
+			" d<Enter> - turn right;\n e<Enter> - advance;\n"
+			" q<Enter> - quit. You can also input an control "
+			"string like \"wwwwwwwaaaaasssssddd\" - it will make "
+			"all correct command" << std::endl;
+
+		sim = builder->buildSimulation(obs);
+
+		while (!quit) {
+			sim->advance(0.0);
+			std::cin >> c;
+			switch (c) {
+			case 'w':
+				sim->accelerate();
+				break;
+			case 's':
+				sim->deccelerate();
+				break;
+			case 'a':
+				sim->turnLeft();
+				break;
+			case 'd':
+				sim->turnRight();
+				break;
+			case 'e':
+				break;
+			case 'q':
+			default:
+				quit = true;
+			}
 		}
 	}
+};
+
+int main(int argc, char *argv[])
+{
+	// Simulation sim(10.0f, 2.0f, 0.1f, 10.0);
+	ObserverPtr simLogPtr = std::make_shared<InfoLog>();
+	StepSimulationBuilder build;
+	build.addSimulationObserver(simLogPtr)
+		.setBicycleLength(10.0)
+		.setBicycleType(SimulationBuilder::Type_Length)
+		.setSimulationAngleStep(2.0)
+		.setSimulationSpeedStep(10.0);
+	
+	// after this line the object 'build' is not valid.
+	std::shared_ptr<SimulationBuilder> b = std::shared_ptr<StepSimulationBuilder>(&build);
+
+	std::shared_ptr<ConsoleSimulationUi> ui = std::make_shared<ConsoleSimulationUi>(b);
+	
+	// note: it was removed because std::shared_from_this can't work with stack
+//	ConsoleSimulationUi ui = ConsoleSimulationUi(b);
+
+	// debug check. will be removed.
+#ifdef _MSC_VER
+	assert(_CrtCheckMemory() != 0);
+#endif
+	ui->loop();
 
 	return 0;
 }

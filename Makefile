@@ -1,4 +1,4 @@
-CCFLAGS = -Wall -Wpedantic -std=c++11
+CCFLAGS = -Wall -Wpedantic -Werror -std=c++11
 INCLUDE = include
 SOURCES = $(wildcard src/*.cpp)
 SOURCE_DIRS = src Linux
