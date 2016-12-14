@@ -36,12 +36,84 @@
     <ClCompile Include="src\SMat.cc">
       <Filter>Source Files\Shared</Filter>
     </ClCompile>
+    <ClCompile Include="src\glfw\context.c">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="src\glfw\init.c">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="src\glfw\input.c">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="src\glfw\monitor.c">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="src\glfw\wgl_context.c">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="src\glfw\win32_init.c">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="src\glfw\win32_monitor.c">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="src\glfw\win32_time.c">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="src\glfw\win32_tls.c">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="src\glfw\win32_window.c">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="src\glfw\window.c">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="src\glfw\win32_joystick.c">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="src\glfw\egl_context.c">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="src\glfw\vulkan.c">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Ui.cpp">
+      <Filter>Source Files\Shared</Filter>
+    </ClCompile>
+    <ClCompile Include="src\FileSimulation.cpp">
+      <Filter>Source Files\Shared</Filter>
+    </ClCompile>
     <ClCompile Include="src\cmdline.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Shared</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\SMat.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\glfw\wgl_context.h">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="src\glfw\win32_platform.h">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="include\SimulationInterface.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Units.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\glfw\win32_joystick.h">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="src\glfw\egl_context.h">
+      <Filter>Source Files\3rdparty\glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="include\FileSimulation.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\BicycleInterface.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

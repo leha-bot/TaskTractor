@@ -38,6 +38,7 @@ public:
 		// now extract exact values from the stream.
 		// time (ms), float x, y, z, float, float, float, velocity (m/s), float, float, angle, float, float
 		str >> tmp;
+		lastTime = simTime;
 		simTime = tmp;
 		str >> pt.x >> pt.y >> pt.z; // todo: operator >>
 		// skip 3 unused fields

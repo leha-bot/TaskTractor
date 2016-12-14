@@ -12,11 +12,35 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\cmdline.cpp" />
+    <ClCompile Include="src\FileSimulation.cpp" />
+    <ClCompile Include="src\glfw\context.c" />
+    <ClCompile Include="src\glfw\egl_context.c" />
+    <ClCompile Include="src\glfw\init.c" />
+    <ClCompile Include="src\glfw\input.c" />
+    <ClCompile Include="src\glfw\monitor.c" />
+    <ClCompile Include="src\glfw\vulkan.c" />
+    <ClCompile Include="src\glfw\wgl_context.c" />
+    <ClCompile Include="src\glfw\win32_init.c" />
+    <ClCompile Include="src\glfw\win32_joystick.c" />
+    <ClCompile Include="src\glfw\win32_monitor.c" />
+    <ClCompile Include="src\glfw\win32_time.c" />
+    <ClCompile Include="src\glfw\win32_tls.c" />
+    <ClCompile Include="src\glfw\win32_window.c" />
+    <ClCompile Include="src\glfw\window.c" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\SMat.cc" />
+    <ClCompile Include="src\Ui.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\BicycleInterface.h" />
+    <ClInclude Include="include\FileSimulation.h" />
+    <ClInclude Include="include\SimulationInterface.h" />
     <ClInclude Include="include\SMat.h" />
+    <ClInclude Include="include\Units.h" />
+    <ClInclude Include="src\glfw\egl_context.h" />
+    <ClInclude Include="src\glfw\wgl_context.h" />
+    <ClInclude Include="src\glfw\win32_joystick.h" />
+    <ClInclude Include="src\glfw\win32_platform.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="task.txt" />
@@ -66,7 +90,7 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;_GLFW_WIN32;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
     </ClCompile>
     <Link>

@@ -76,6 +76,24 @@
 #include <condition_variable>
 #include <assert.h>
 
+template<typename T>
+void fix_eps(T &t)
+{
+	if (fabs(t) < std::numeric_limits<T>::epsilon()) {
+		t = 0.0;
+	}
+}
+
+template<typename T>
+void clamp_degrees(T &degs)
+{
+	if (degs >= 360.0) {
+		degs -= 360.0;
+	} else if (degs <= 0.0) {
+		degs += 360.0;
+	}
+}
+
 class SimpleBicycle : public BicycleInterface {
 protected:
 	float x, y;
@@ -94,14 +112,6 @@ private:
 	{
 		x_sp_cos_angle = cos_angle * speed;
 		y_sp_sin_angle = sin_angle * speed;
-	}
-
-	template<typename T>
-	void fix_eps(T &t)
-	{
-		if (fabs(t) < std::numeric_limits<T>::epsilon()) {
-			t = 0.0;
-		}
 	}
 
 	void calc_angle_optimize_vars()
@@ -164,7 +174,7 @@ public:
 		pt.y = y;
 	}
 
-	/*
+	/**
 	@note Assume that this bicycle is actually unicycle.
 	*/
 	virtual void getFrontWheelCoords(UnitPoint &pt) override
@@ -215,7 +225,7 @@ public:
 		getRearWheelCoords(pt);
 
 		pt.x += this->length * cos(this->vehicle_angle_rads);
-		pt.y += this->length * sin(this->vehicle_angle_rads);		
+		pt.y += this->length * sin(this->vehicle_angle_rads);	
 	}
 
 
@@ -223,10 +233,12 @@ public:
 	{
 		float speed = getSpeed();
 		float angle_fr = getFrontWheelRotationRads();
+		float angle_deg = getFrontWheelRotation();
 		float ds = speed * units;
 
 		x += ds * cos(vehicle_angle_rads);
 		y += ds * sin(vehicle_angle_rads);
+		
 		vehicle_angle_rads += tan(angle_fr) / length * ds;
 	}
 
@@ -254,10 +266,10 @@ public:
 		sim->getRearWheelCoords(pt);
 		std::cout << "" << tag;
 		std::cout << ": time: " << simTime << "(" << delta << ")";
-		std::cout << ";pos (rear): x: " << pt.x << ", y: " << pt.y;
+		std::cout << ";pos rear: x: " << pt.x << ", y: " << pt.y;
 		std::cout << "; speed: " << sim->getSpeed();
 		sim->getFrontWheelCoords(pt);
-		std::cout << "; Front pos: x: " << pt.x << ", y: " << pt.y;
+		std::cout << "; pos frnt: x: " << pt.x << ", y: " << pt.y;
 		std::cout << "; front angle: " << sim->getFrontWheelRotation()
 			<< "; vehicle angle: " << sim->getVehicleRotation()
 			<< "; Len: " << sim->getLength()
@@ -340,13 +352,6 @@ public:
 class Simulation : public SimulationInterface {
 	SimulationObserverGroup observers;
 	std::shared_ptr<BicycleInterface> simulated;
-	typedef std::shared_ptr<SimulationObserver> ObserverPtr;
-public:
-	typedef BicycleInterface::TimeUnit Time;
-	typedef BicycleInterface::CoordUnit Speed;
-	typedef BicycleInterface::CoordUnit Length;
-	typedef BicycleInterface::AngleDegrees AngleDegrees;
-
 private:
 	Time stepTime;
 	AngleDegrees stepAngle;
@@ -398,6 +403,31 @@ public:
 	{
 		simulated->modifySpeed(-stepSpeed);
 	}
+protected:
+	virtual BicycleInterface * getSimulated() override
+	{
+		return simulated.get();
+	}
+
+	virtual const Speed & getSpeedDelta() override
+	{
+		return stepSpeed;
+	}
+
+	virtual const AngleDegrees & getAngleDelta() override
+	{
+		return stepAngle;
+	}
+
+	virtual const Time & getTimeDelta() override
+	{
+		return stepTime;
+	}
+
+	virtual const Time & getSimulationTime() override
+	{
+		return simulationTime;
+	}
 };
 
 
@@ -421,6 +451,8 @@ public:
 			this->makeBicycle(), this->getBicycleTag(),
 			this->observers);
 	}
+
+	// void setSimulation
 };
 
 /** @todo It will be the base class for different UI implementations.
@@ -435,19 +467,56 @@ public:
 
 class ConsoleSimulationUi : public SimulationObserver,
 public std::enable_shared_from_this<ConsoleSimulationUi> {
-	std::shared_ptr<SimulationInterface> sim;
+	std::shared_ptr<SimulationWithHandlers> sim;
 	std::shared_ptr<SimulationBuilder> builder;
 	// std::condition_variable var;
 	bool quit;
+	bool speedChangeEnabled;
+	bool angleChangeEnabled;
+	ConstraintUnit <BicycleInterface::CoordUnit> speedConstraints;
+	ConstraintUnit <BicycleInterface::AngleDegrees> angleConstraints;
+	
+	template <typename T>
+	class ConstraintsHandler : public SimulationWithHandlers::Handler<T> {
+		const ConstraintUnit<Unit> &u;
+	public:
+		ConstraintsHandler(const ConstraintUnit<Unit> &u)
+			: u(u)
+		{
+		}
+
+		bool handle(const Unit &oldValue, const Unit &delta, Unit &newValue, bool &notify) override
+		{
+			notify = false;
+			int rng = u.in_range(newValue);
+			if (rng == 0) {
+				return false;
+			} else if (rng == 1) {
+				newValue = u.upper();
+			} else {
+				newValue = u.lower();
+			}
+			return true;
+		}
+	};
+
+	enum ConstraintState {
+		ConstraintState_Disabled, ConstraintState_Enabled,
+		ConstraintState_Upper, ConstraintState_Lower
+	};
+
 public:
 	ConsoleSimulationUi(std::shared_ptr<SimulationBuilder> builder)
-		: builder(builder), quit(false)
+		: builder(builder), quit(false), speedConstraints(0.0, 20.0),
+		angleConstraints(-30.0, 30.0)
+
 	{
 	}
 
-	virtual void notify(const std::shared_ptr<BicycleInterface> &sim,
+	virtual void notify(const std::shared_ptr<BicycleInterface> &bicycle,
 		const char *tag, const Time &simTime, const Time &delta) override
 	{
+		bicycle->getSpeed();
 	}
 
 	void loop()
@@ -459,13 +528,26 @@ public:
 			" s<Enter> - deccelerate;\n a<Enter> - turn left;\n"
 			" d<Enter> - turn right;\n e<Enter> - advance;\n"
 			" q<Enter> - quit. You can also input an control "
-			"string like \"wwwwwwwaaaaasssssddd\" - it will make "
-			"all correct command" << std::endl;
+			"string like \"wwwwwwwaaaaasssssddd\" - it will be a "
+			"correct commands sequence." << std::endl;
+		sim = std::make_shared<SimulationWithHandlers>(builder->buildSimulation(obs));
+		
+		typedef ConstraintsHandler<SimulationInterface::Speed> SpHdnl;
+		typedef ConstraintsHandler<SimulationInterface::AngleDegrees> AnglHndl;
+		/*SpHdnl spHndl(speedConstraints);
+		AnglHndl anglHndl(angleConstraints);
+		*/// std::shared_ptr<
+		std::shared_ptr<SimulationWithHandlers::SpeedHandler> spptr = std::make_shared<SpHdnl>(speedConstraints);
+		assert(_CrtCheckMemory() != 0);
+		std::shared_ptr<SimulationWithHandlers::AngleHandler> anptr = std::make_shared<AnglHndl>(angleConstraints);
+		assert(_CrtCheckMemory() != 0);
+		sim->setAngleChangeHandler(anptr);
+		sim->setSpeedChangeHandler(spptr);
 
-		sim = builder->buildSimulation(obs);
+		// sim = std::shared_ptr<SimulationInterface>(new SimulationWithHandlers(builder->buildSimulation(obs)));
 
 		while (!quit) {
-			sim->advance(0.0);
+			sim->advance();
 			std::cin >> c;
 			switch (c) {
 			case 'w':
