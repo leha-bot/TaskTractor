@@ -7,6 +7,12 @@
 #include <memory>
 #include <list>
 
+// forward declaration for typedef.
+class SimulationInterface;
+
+typedef std::shared_ptr<SimulationInterface> SimPtr;
+typedef std::shared_ptr<BicycleInterface> BicyclePtr;
+
 class SimulationInterface {
 public:
 	typedef BicycleInterface::TimeUnit Time;
@@ -29,7 +35,7 @@ public:
 	virtual const Time &getSimulationTime() = 0;
 
 protected:
-	BicycleInterface *getSimulatedFromInstance(std::shared_ptr<SimulationInterface> iface)
+	BicycleInterface *getSimulatedFromInstance(SimPtr &iface)
 	{
 		return iface->getSimulated();
 	}
@@ -39,18 +45,18 @@ protected:
 
 class SimulationObserver {
 public:
-	typedef BicycleInterface::TimeUnit Time;
-	virtual void notify(const std::shared_ptr<BicycleInterface> &sim,
+	typedef SimulationInterface::Time Time;
+	virtual void notify(const BicyclePtr &sim,
 		const char *tag, const Time &simTime, const Time &delta) = 0;
 };
 
-typedef std::shared_ptr<SimulationObserver> ObserverPtr;
+typedef std::shared_ptr<SimulationObserver> SimObserverPtr;
 
 class SimulationObserverGroup : public SimulationObserver {
-	std::list<ObserverPtr> observers;
+	std::list<SimObserverPtr> observers;
 
 public:
-	virtual void notify(const std::shared_ptr<BicycleInterface> &sim,
+	virtual void notify(const BicyclePtr &sim,
 		const char *tag, const Time &simTime,
 		const Time &delta) override
 	{
@@ -59,194 +65,14 @@ public:
 		}
 	}
 
-	void add(ObserverPtr &observer)
+	void add(SimObserverPtr &observer)
 	{
 		observers.push_back(observer);
 	}
 
-	void remove(ObserverPtr &observer)
+	void remove(SimObserverPtr &observer)
 	{
 		observers.remove(observer);
 	}
 };
 
-/** @brief An decorator class which add speed change and angle change handlers.
- */
-class SimulationWithHandlers : public SimulationInterface {
-public:
-	/** @brief Handles all units' changes. The Simulation calls method
-	*   handle() on calling certain methods.
-	*/
-	template <typename UnitT>
-	class Handler {
-	public:
-		typedef UnitT Unit;
-		/** @brief Handles parameters changing.
-		 *  @param oldValue Old value.
-		 *  @param delta Parameter change delta.
-		 *  @param newValue New value. On function call newValue == oldValue + delta.
-		 *         Function may change this value, but it must returns true on this.
-		 *  @param notify If true, then SimulationWithHandlers call SimulationInterface::advance(0.0)
-		*/
-		virtual bool handle(const Unit &oldValue, const Unit &delta, Unit &newValue, bool &notify) = 0;
-	};
-protected:
-	template <typename T>
-	class DefaultHandler : public Handler<T> {
-	public:
-		virtual bool handle(const T &oldValue, const T &delta, T &newValue, bool &notify)
-		{
-			notify = false;
-			return false;
-		}
-	};
-	std::shared_ptr<SimulationInterface> iface;
-	std::shared_ptr<Handler<BicycleInterface::CoordUnit>> speedChangeHandler;
-	std::shared_ptr<Handler<BicycleInterface::AngleDegrees>> angleChangeHandler;
-
-
-	BicycleInterface *biciface;
-
-public:
-	typedef Handler<Speed> SpeedHandler;
-	typedef Handler<AngleDegrees> AngleHandler;
-	virtual BicycleInterface *getSimulated() override
-	{
-		return this->biciface;
-	}
-
-
-	virtual const Speed & getSpeedDelta() override
-	{
-		throw std::logic_error("The method or operation is not implemented.");
-	}
-
-
-	virtual const AngleDegrees & getAngleDelta() override
-	{
-		throw std::logic_error("The method or operation is not implemented.");
-	}
-
-
-	virtual const Time & getTimeDelta() override
-	{
-		throw std::logic_error("The method or operation is not implemented.");
-	}
-
-
-	virtual const Time & getSimulationTime() override
-	{
-		throw std::logic_error("The method or operation is not implemented.");
-	}
-
-	/*addSpeedConstraint, addAngle, removeConstraint, changeConstraint*/
-	virtual void setSpeedChangeHandler(std::shared_ptr<SpeedHandler> &h)
-	{
-		speedChangeHandler = h;
-	}
-
-	virtual void setAngleChangeHandler(std::shared_ptr<AngleHandler> &h)
-	{
-		angleChangeHandler = h;
-	}
-
-	// routed methods
-
-	virtual void advance(const Time &step) override
-	{
-		iface->advance(step);
-	}
-
-	virtual void advance() override
-	{
-		iface->advance();
-	}
-
-
-	virtual void turnLeft() override
-	{
-		auto oldVal = biciface->getFrontWheelRotation();
-		auto delta = iface->getAngleDelta();
-		decltype (oldVal) newVal = oldVal + delta;
-		bool notify = false;
-		bool handled = angleChangeHandler->handle(oldVal, delta, newVal, notify);
-		if (handled) {
-			if (oldVal != newVal) {
-				biciface->setFrontWheelRotation(newVal);
-			}
-			if (notify) {
-				this->advance(0.0);
-			}
-		} else {
-			iface->turnLeft();
-		}
-	}
-
-	virtual void turnRight() override
-	{
-		auto oldVal = biciface->getFrontWheelRotation();
-		auto delta = iface->getAngleDelta();
-		decltype (oldVal) newVal = oldVal - delta;
-		bool notify = false;
-		bool handled = angleChangeHandler->handle(oldVal, delta, newVal, notify);
-		if (handled) {
-			if (oldVal != newVal) {
-				biciface->setFrontWheelRotation(newVal);
-			}
-			if (notify) {
-				this->advance(0.0);
-			}
-		} else {
-			iface->turnRight();
-		}
-	}
-
-
-	virtual void accelerate() override
-	{
-		auto oldVal = biciface->getSpeed();
-		auto delta = iface->getSpeedDelta();
-		decltype (oldVal) newVal = oldVal + delta;
-		bool notify = false;
-		bool handled = speedChangeHandler->handle(oldVal, delta, newVal, notify);
-		if (handled) {
-			if (oldVal != newVal) {
-				biciface->setFrontWheelRotation(newVal);
-			}
-			if (notify) {
-				this->advance(0.0);
-			}
-		} else {
-			iface->accelerate();
-		}
-	}
-
-
-	virtual void deccelerate() override
-	{
-		auto oldVal = biciface->getSpeed();
-		auto delta = iface->getSpeedDelta();
-		decltype (oldVal) newVal = oldVal - delta;
-		bool notify = false;
-		bool handled = speedChangeHandler->handle(oldVal, delta, newVal, notify);
-		if (handled) {
-			if (oldVal != newVal) {
-				biciface->setFrontWheelRotation(newVal);
-			}
-			if (notify) {
-				this->advance(0.0);
-			}
-		} else {
-			iface->deccelerate();
-		}
-	}
-
-	SimulationWithHandlers(std::shared_ptr<SimulationInterface> iface)
-		:iface(iface)
-	{
-		this->biciface = getSimulatedFromInstance(iface);
-		speedChangeHandler = std::make_shared<DefaultHandler<Speed>>();
-		angleChangeHandler = std::make_shared<DefaultHandler<AngleDegrees>>();
-		assert(this->biciface != nullptr);
-	}
-};

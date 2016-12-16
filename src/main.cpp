@@ -64,6 +64,8 @@
  * + q - quit.
  */
 #include "SimulationInterface.h"
+#include "SimulationWithHandlers.h"
+#include "FileSimulationWrap.h"
 #include "Units.h"
 #include <string>
 #include <type_traits>
@@ -75,6 +77,7 @@
 #include "BicycleInterface.h"
 #include <condition_variable>
 #include <assert.h>
+#include <ratio>
 
 template<typename T>
 void fix_eps(T &t)
@@ -94,13 +97,16 @@ void clamp_degrees(T &degs)
 	}
 }
 
+/** @brief A simple "unicycle" model which assumes that length is 0, and rear 
+ *        wheel and front wheel is equivalent.
+ */
 class SimpleBicycle : public BicycleInterface {
 protected:
 	float x, y;
 private:
-	float speed;
+	Speed speed;
 	float angle_rads;
-	float angle_degs;
+	AngleDegrees angle_degs;
 	
 	// optimizing vars.
 	float cos_angle;
@@ -158,25 +164,9 @@ public:
 		calc_speed_optimize_vars();
 	}
 
-	virtual const float getSpeed() override
-	{
-		return speed;
-	}
-
-	virtual const float getFrontWheelRotation() override
-	{
-		return angle_degs;
-	}
-
-	virtual void getRearWheelCoords(UnitPoint &pt) override
-	{
-		pt.x = x;
-		pt.y = y;
-	}
-
-	/**
-	@note Assume that this bicycle is actually unicycle.
-	*/
+	/** @note Assume that this bicycle is actually unicycle in this simplified class.
+	 *
+	 */
 	virtual void getFrontWheelCoords(UnitPoint &pt) override
 	{
 		getRearWheelCoords(pt);
@@ -197,6 +187,23 @@ public:
 	{
 		return 0.0f;
 	}
+
+	virtual const float getSpeed() override
+	{
+		return speed;
+	}
+
+	virtual const float getFrontWheelRotation() override
+	{
+		return angle_degs;
+	}
+
+	virtual void getRearWheelCoords(UnitPoint &pt) override
+	{
+		pt.x = x;
+		pt.y = y;
+	}
+
 
 	virtual const float getVehicleRotation() override
 	{
@@ -228,7 +235,6 @@ public:
 		pt.y += this->length * sin(this->vehicle_angle_rads);	
 	}
 
-
 	virtual void advance(const TimeUnit &units) override
 	{
 		float speed = getSpeed();
@@ -241,7 +247,6 @@ public:
 		
 		vehicle_angle_rads += tan(angle_fr) / length * ds;
 	}
-
 
 	virtual const CoordUnit getLength() override
 	{
@@ -259,8 +264,8 @@ class InfoLog : public SimulationObserver {
 public:
 	void log();
 
-	virtual void notify(const std::shared_ptr<BicycleInterface> &sim, const char *tag,
-		const Time &simTime, const Time &delta) override
+	virtual void notify(const std::shared_ptr<BicycleInterface> &sim,
+		const char *tag, const Time &simTime, const Time &delta) override
 	{
 		BicycleInterface::UnitPoint pt;
 		sim->getRearWheelCoords(pt);
@@ -277,17 +282,17 @@ public:
 	}
 };
 
-/* @brief Constructs instances of SimulationInterface (defined by derived classes)
-  and BicycleInterface (defined by private member SimulationBuilder::type's value.
-*/
+/** @brief Constructs instances of SimulationInterface (defined by derived 
+ *         classes) and BicycleInterface (defined by private member 
+ *         SimulationBuilder::type's value.
+ */
 class SimulationBuilder {
 public:
 	typedef BicycleInterface::CoordUnit CoordUnit;
-//	typedef BicycleInterface::CoordUnit CoordUnit;
 	typedef BicycleInterface::AngleDegrees AngleDegrees;
 	enum BicycleType {
 		Type_Simple,
-		Type_Length
+		Type_Lengthy
 	};
 
 protected:
@@ -297,6 +302,7 @@ protected:
 	BicycleInterface::CoordUnit speedStep;
 	BicycleInterface::AngleDegrees angleStep;
 	BicycleType type;
+	std::string filename;
 
 	std::shared_ptr<BicycleInterface> makeBicycle()
 	{
@@ -311,6 +317,7 @@ protected:
 			"SimpleBicycle" :
 			"LengthBicycle";
 	}
+
 public:
 	SimulationBuilder()
 		:length(0), speedStep(0), angleStep(0), type(Type_Simple){}
@@ -339,7 +346,7 @@ public:
 		return *this;
 	}
 
-	SimulationBuilder &addSimulationObserver(ObserverPtr ptr)
+	SimulationBuilder &addSimulationObserver(SimObserverPtr ptr)
 	{
 		this->observers.add(ptr);
 		return *this;
@@ -522,7 +529,7 @@ public:
 	void loop()
 	{
 		char c;
-		ObserverPtr obs = 
+		SimObserverPtr obs = 
 			std::static_pointer_cast<SimulationObserver>(this->shared_from_this());
 		std::cout << "ConsoleUi usage: \n w<Enter> - accelerate;\n"
 			" s<Enter> - deccelerate;\n a<Enter> - turn left;\n"
@@ -575,11 +582,11 @@ public:
 int main(int argc, char *argv[])
 {
 	// Simulation sim(10.0f, 2.0f, 0.1f, 10.0);
-	ObserverPtr simLogPtr = std::make_shared<InfoLog>();
+	SimObserverPtr simLogPtr = std::make_shared<InfoLog>();
 	StepSimulationBuilder build;
 	build.addSimulationObserver(simLogPtr)
 		.setBicycleLength(10.0)
-		.setBicycleType(SimulationBuilder::Type_Length)
+		.setBicycleType(SimulationBuilder::Type_Lengthy)
 		.setSimulationAngleStep(2.0)
 		.setSimulationSpeedStep(10.0);
 	

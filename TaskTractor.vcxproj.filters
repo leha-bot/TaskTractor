@@ -81,10 +81,10 @@
     <ClCompile Include="src\Ui.cpp">
       <Filter>Source Files\Shared</Filter>
     </ClCompile>
-    <ClCompile Include="src\FileSimulation.cpp">
+    <ClCompile Include="src\cmdline.cpp">
       <Filter>Source Files\Shared</Filter>
     </ClCompile>
-    <ClCompile Include="src\cmdline.cpp">
+    <ClCompile Include="src\FileSimulationWrap.cpp">
       <Filter>Source Files\Shared</Filter>
     </ClCompile>
   </ItemGroup>
@@ -110,10 +110,13 @@
     <ClInclude Include="src\glfw\egl_context.h">
       <Filter>Source Files\3rdparty\glfw</Filter>
     </ClInclude>
-    <ClInclude Include="include\FileSimulation.h">
+    <ClInclude Include="include\BicycleInterface.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\BicycleInterface.h">
+    <ClInclude Include="include\FileSimulationWrap.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\SimulationVoidDecorator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -125,6 +128,10 @@
   <ItemGroup>
     <None Include="sample.dat">
       <Filter>Misc</Filter>
+    </None>
+    <None Include="ClassDiagram.cd" />
+    <None Include="include\SimulationWithHandlers.h">
+      <Filter>Header Files</Filter>
     </None>
   </ItemGroup>
 </Project>
