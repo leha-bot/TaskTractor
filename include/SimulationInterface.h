@@ -76,3 +76,25 @@ public:
 	}
 };
 
+/** @brief The base class for different UI implementations.
+*
+*/
+class SimulationUi : public SimulationObserver,
+	public std::enable_shared_from_this<SimulationUi> {
+
+public:
+	virtual void notify(const BicyclePtr &sim, const char *tag,
+		const Time &simTime, const Time &delta) = 0;
+
+	virtual void loop() = 0;
+};
+
+/** @brief A lightweight Builder interface for minimizing dependencies.
+*         Extracted from class SimulationBuilder.
+*/
+class SimulationLightBuilder {
+public:
+	virtual void addObserver(SimObserverPtr &ptr) = 0;
+	virtual SimPtr build() = 0;
+
+};

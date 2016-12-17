@@ -282,80 +282,6 @@ public:
 	}
 };
 
-/** @brief Constructs instances of SimulationInterface (defined by derived 
- *         classes) and BicycleInterface (defined by private member 
- *         SimulationBuilder::type's value.
- */
-class SimulationBuilder {
-public:
-	typedef BicycleInterface::CoordUnit CoordUnit;
-	typedef BicycleInterface::AngleDegrees AngleDegrees;
-	enum BicycleType {
-		Type_Simple,
-		Type_Lengthy
-	};
-
-protected:
-	SimulationObserverGroup observers;
-
-	BicycleInterface::CoordUnit length;
-	BicycleInterface::CoordUnit speedStep;
-	BicycleInterface::AngleDegrees angleStep;
-	BicycleType type;
-	std::string filename;
-
-	std::shared_ptr<BicycleInterface> makeBicycle()
-	{
-		return this->type == Type_Simple ?
-			std::make_shared<SimpleBicycle>() :
-			std::make_shared<LengthBicycle>(this->length);
-	}
-
-	const char *getBicycleTag()
-	{
-		return this->type == Type_Simple ?
-			"SimpleBicycle" :
-			"LengthBicycle";
-	}
-
-public:
-	SimulationBuilder()
-		:length(0), speedStep(0), angleStep(0), type(Type_Simple){}
-
-	SimulationBuilder &setBicycleLength(const CoordUnit &length)
-	{
-		this->length = length;
-		return *this;
-	}
-
-	SimulationBuilder &setBicycleType(BicycleType type)
-	{
-		this->type = type;
-		return *this;
-	}
-	
-	SimulationBuilder &setSimulationSpeedStep(const CoordUnit &speedStep)
-	{
-		this->speedStep = speedStep;
-		return *this;
-	}
-
-	SimulationBuilder &setSimulationAngleStep(const CoordUnit &angleStep)
-	{
-		this->angleStep = angleStep;
-		return *this;
-	}
-
-	SimulationBuilder &addSimulationObserver(SimObserverPtr ptr)
-	{
-		this->observers.add(ptr);
-		return *this;
-	}
-
-	virtual std::shared_ptr<SimulationInterface> buildSimulation(
-		std::shared_ptr<SimulationObserver> observerUi) = 0;
-};
-
 class Simulation : public SimulationInterface {
 	SimulationObserverGroup observers;
 	std::shared_ptr<BicycleInterface> simulated;
@@ -369,7 +295,7 @@ private:
 public:
 	Simulation(const Time &simStep, const AngleDegrees &angleStep,
 		const Speed &speedStep, 
-		std::shared_ptr<BicycleInterface> simulated,
+		BicyclePtr simulated,
 		const char *simtag,
 		const SimulationObserverGroup &observers)
 		: observers(observers), simulated(simulated), 
@@ -437,14 +363,112 @@ protected:
 	}
 };
 
+/** @brief Constructs instances of SimulationInterface (defined by parameters
+*          and BicycleInterface (defined by private member
+*          SimulationBuilder::BicycleType 's value.
+*/
+class SimulationBuilder : public SimulationLightBuilder {
+public:
+	typedef BicycleInterface::CoordUnit CoordUnit;
+	typedef BicycleInterface::AngleDegrees AngleDegrees;
+	enum BicycleType {
+		Type_Simple,
+		Type_Lengthy
+	};
 
-class StepSimulationBuilder : public SimulationBuilder {
+protected:
+	SimulationObserverGroup observers;
+
+	BicycleInterface::CoordUnit length;
+	BicycleInterface::CoordUnit speedStep;
+	BicycleInterface::AngleDegrees angleStep;
+	BicycleType type;
+	std::string filename;
+	bool dual;
+
+	std::shared_ptr<BicycleInterface> makeBicycle()
+	{
+		return this->type == Type_Simple ?
+			std::make_shared<SimpleBicycle>() :
+			std::make_shared<LengthBicycle>(this->length);
+	}
+
+	const char *getBicycleTag()
+	{
+		return this->type == Type_Simple ?
+			"SimpleBicycle" :
+			"LengthBicycle";
+	}
 
 public:
-	virtual std::shared_ptr<SimulationInterface> buildSimulation(
-		std::shared_ptr<SimulationObserver> observerUi) override
+	SimulationBuilder()
+		:length(0), speedStep(0), angleStep(0), type(Type_Simple),
+		dual(false) {}
+
+	SimulationBuilder &setBicycleLength(const CoordUnit &length)
+	{
+		this->length = length;
+		return *this;
+	}
+
+	SimulationBuilder &setBicycleType(BicycleType type)
+	{
+		this->type = type;
+		return *this;
+	}
+
+	SimulationBuilder &setSimulationSpeedStep(const CoordUnit &speedStep)
+	{
+		this->speedStep = speedStep;
+		return *this;
+	}
+
+	SimulationBuilder &setSimulationAngleStep(const CoordUnit &angleStep)
+	{
+		this->angleStep = angleStep;
+		return *this;
+	}
+
+	/** @note This method has been added for enabling the chained calls.
+	*
+	*/
+	SimulationBuilder &addSimulationObserver(SimObserverPtr &ptr)
+	{
+		this->observers.add(ptr);
+		return *this;
+	}
+
+	SimulationBuilder &setFilename(const std::string &fname)
+	{
+		this->filename = fname;
+		return *this;
+	}
+
+	/** @brief Sets the dual decorators mode.
+	* @see DualSimulation.
+	*/
+	SimulationBuilder &setDual(bool dual)
+	{
+		this->dual = dual;
+	}
+
+	std::shared_ptr<SimulationInterface>
+		buildSimulation(SimObserverPtr &observerUi)
 	{
 		this->observers.add(observerUi);
+
+		return build();
+	}
+
+	// Inherited methods
+
+	virtual void addObserver(SimObserverPtr &ptr) override
+	{
+		addSimulationObserver(ptr);
+	}
+
+	virtual SimPtr build() override
+	{
 		/*
 		const Time &simStep, const AngleDegrees &angleStep,
 		const Speed &speedStep,
@@ -452,26 +476,20 @@ public:
 		const char *simtag,
 		const SimulationObserverGroup &observers
 		*/
-		return std::make_shared<Simulation>(0.05f,
+		std::shared_ptr<SimulationInterface> ret = std::make_shared<Simulation>(0.05f,
 			this->angleStep,
 			this->speedStep,
 			this->makeBicycle(), this->getBicycleTag(),
 			this->observers);
+		if (!this->filename.empty()) {
+			return std::make_shared<FileSimulationWrap>(ret, this->filename.c_str());
+		}
+		return ret;
 	}
-
-	// void setSimulation
 };
 
-/** @todo It will be the base class for different UI implementations.
- *
-*/
-class SimulationUi : public SimulationObserver {
-
-public:
-	virtual void notify(const std::shared_ptr<BicycleInterface> &sim,
-		const char *tag, const Time &simTime, const Time &delta) = 0;
-};
-
+/** @brief The simple Console interface. It works on all platforms supporting the stdlibc++.
+ */
 class ConsoleSimulationUi : public SimulationObserver,
 public std::enable_shared_from_this<ConsoleSimulationUi> {
 	std::shared_ptr<SimulationWithHandlers> sim;
@@ -531,12 +549,14 @@ public:
 		char c;
 		SimObserverPtr obs = 
 			std::static_pointer_cast<SimulationObserver>(this->shared_from_this());
+
 		std::cout << "ConsoleUi usage: \n w<Enter> - accelerate;\n"
 			" s<Enter> - deccelerate;\n a<Enter> - turn left;\n"
 			" d<Enter> - turn right;\n e<Enter> - advance;\n"
 			" q<Enter> - quit. You can also input an control "
 			"string like \"wwwwwwwaaaaasssssddd\" - it will be a "
 			"correct commands sequence." << std::endl;
+		
 		sim = std::make_shared<SimulationWithHandlers>(builder->buildSimulation(obs));
 		
 		typedef ConstraintsHandler<SimulationInterface::Speed> SpHdnl;
@@ -581,19 +601,29 @@ public:
 
 int main(int argc, char *argv[])
 {
+	bool glfw = false;
+	
 	// Simulation sim(10.0f, 2.0f, 0.1f, 10.0);
 	SimObserverPtr simLogPtr = std::make_shared<InfoLog>();
-	StepSimulationBuilder build;
-	build.addSimulationObserver(simLogPtr)
+	SimulationBuilder builder;
+	builder.addSimulationObserver(simLogPtr)
 		.setBicycleLength(10.0)
 		.setBicycleType(SimulationBuilder::Type_Lengthy)
 		.setSimulationAngleStep(2.0)
 		.setSimulationSpeedStep(10.0);
 	
 	// after this line the object 'build' is not valid.
-	std::shared_ptr<SimulationBuilder> b = std::shared_ptr<StepSimulationBuilder>(&build);
+	std::shared_ptr<SimulationLightBuilder> b = std::shared_ptr<SimulationBuilder>(&builder);
+#ifdef _MSC_VER
+	if (glfw) {
+		std::shared_ptr<SimulationUi> getGlfwUI(std::shared_ptr<SimulationLightBuilder> &ptr);
 
-	std::shared_ptr<ConsoleSimulationUi> ui = std::make_shared<ConsoleSimulationUi>(b);
+		auto ui = getGlfwUI(b);
+		ui->loop();
+	}
+#endif
+	std::shared_ptr<ConsoleSimulationUi> ui =
+		std::make_shared<ConsoleSimulationUi>(std::static_pointer_cast<SimulationBuilder>(b));
 	
 	// note: it was removed because std::shared_from_this can't work with stack
 //	ConsoleSimulationUi ui = ConsoleSimulationUi(b);

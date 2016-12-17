@@ -12,7 +12,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\cmdline.cpp" />
-    <ClCompile Include="src\FileSimulationWrap.cpp" />
     <ClCompile Include="src\glfw\context.c" />
     <ClCompile Include="src\glfw\egl_context.c" />
     <ClCompile Include="src\glfw\init.c" />
@@ -33,9 +32,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\BicycleInterface.h" />
+    <ClInclude Include="include\DualSimulation.h" />
     <ClInclude Include="include\FileSimulationWrap.h" />
     <ClInclude Include="include\SimulationInterface.h" />
-    <ClInclude Include="include\SimulationVoidDecorator.h" />
+    <ClInclude Include="include\SimulationDecoratorBase.h" />
     <ClInclude Include="include\SMat.h" />
     <ClInclude Include="include\Units.h" />
     <ClInclude Include="src\glfw\egl_context.h" />

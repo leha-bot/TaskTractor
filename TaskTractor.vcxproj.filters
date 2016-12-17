@@ -84,9 +84,6 @@
     <ClCompile Include="src\cmdline.cpp">
       <Filter>Source Files\Shared</Filter>
     </ClCompile>
-    <ClCompile Include="src\FileSimulationWrap.cpp">
-      <Filter>Source Files\Shared</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\SMat.h">
@@ -116,7 +113,10 @@
     <ClInclude Include="include\FileSimulationWrap.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\SimulationVoidDecorator.h">
+    <ClInclude Include="include\SimulationDecoratorBase.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\DualSimulation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
