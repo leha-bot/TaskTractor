@@ -65,6 +65,11 @@ public:
 		return decorated->getSimulationTime();
 	}
 
+	virtual SimPtr getDecorated()
+	{
+		return decorated;
+	}
+
 protected:
 	virtual BicycleInterface *getSimulated() override
 	{

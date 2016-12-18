@@ -25,7 +25,9 @@ public:
 
 	virtual void advance(const TimeUnit &units) = 0;
 	virtual void setFrontWheelRotation(const AngleDegrees &units) = 0;
+	virtual void setBackWheelRotation(const AngleDegrees &units) = 0;
 	virtual void setSpeed(const Speed &units) = 0;
+	virtual void setCoords(const UnitPoint &pt) = 0; // { X, Y }
 	virtual void modifySpeed(const CoordUnit &delta) = 0;
 	virtual void modifyFrontWheelRotation(const AngleDegrees &delta) = 0;
 

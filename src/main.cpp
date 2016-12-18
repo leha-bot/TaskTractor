@@ -78,6 +78,7 @@
 #include <condition_variable>
 #include <assert.h>
 #include <ratio>
+#include "..\include\DualSimulation.h"
 
 template<typename T>
 void fix_eps(T &t)
@@ -102,7 +103,8 @@ void clamp_degrees(T &degs)
  */
 class SimpleBicycle : public BicycleInterface {
 protected:
-	float x, y;
+	UnitPoint position;
+	//float x, y;
 private:
 	Speed speed;
 	float angle_rads;
@@ -132,8 +134,9 @@ private:
 public:
 	SimpleBicycle()
 	{
-		x = 0;
-		y = 0;
+		position.x = 0;
+		position.y = 0;
+		position.z = 0;
 		angle_rads = 0;
 		angle_degs = 0;
 		speed = 0;
@@ -145,8 +148,8 @@ public:
 
 	virtual void advance(const TimeUnit &units) override
 	{
-		x += units * x_sp_cos_angle;
-		y += units * y_sp_sin_angle;
+		position.x += units * x_sp_cos_angle;
+		position.y += units * y_sp_sin_angle;
 		// x += speed * units * cos(angle_rads);
 		// y += speed * units * sin(angle_rads);
 	}
@@ -158,7 +161,7 @@ public:
 		calc_angle_optimize_vars();
 	}
 
-	virtual void setSpeed(const float &units) override
+	virtual void setSpeed(const Speed &units) override
 	{
 		speed = units;
 		calc_speed_optimize_vars();
@@ -200,14 +203,22 @@ public:
 
 	virtual void getRearWheelCoords(UnitPoint &pt) override
 	{
-		pt.x = x;
-		pt.y = y;
+		pt = position;
 	}
-
 
 	virtual const float getVehicleRotation() override
 	{
 		return getFrontWheelRotation();
+	}
+
+	virtual void setBackWheelRotation(const AngleDegrees &units) override
+	{
+		setFrontWheelRotation(units);
+	}
+
+	virtual void setCoords(const UnitPoint &pt) override
+	{
+		this->position = pt;
 	}
 
 protected:
@@ -242,8 +253,8 @@ public:
 		float angle_deg = getFrontWheelRotation();
 		float ds = speed * units;
 
-		x += ds * cos(vehicle_angle_rads);
-		y += ds * sin(vehicle_angle_rads);
+		position.x += ds * cos(vehicle_angle_rads);
+		position.y += ds * sin(vehicle_angle_rads);
 		
 		vehicle_angle_rads += tan(angle_fr) / length * ds;
 	}
@@ -371,6 +382,7 @@ class SimulationBuilder : public SimulationLightBuilder {
 public:
 	typedef BicycleInterface::CoordUnit CoordUnit;
 	typedef BicycleInterface::AngleDegrees AngleDegrees;
+	
 	enum BicycleType {
 		Type_Simple,
 		Type_Lengthy
@@ -450,6 +462,7 @@ public:
 	SimulationBuilder &setDual(bool dual)
 	{
 		this->dual = dual;
+		return *this;
 	}
 
 	std::shared_ptr<SimulationInterface>
@@ -476,14 +489,28 @@ public:
 		const char *simtag,
 		const SimulationObserverGroup &observers
 		*/
-		std::shared_ptr<SimulationInterface> ret = std::make_shared<Simulation>(0.05f,
+		BicyclePtr bicycle = this->makeBicycle();
+		const char *tag = this->getBicycleTag();
+		SimPtr ret = std::make_shared<Simulation>(0.05f,
 			this->angleStep,
 			this->speedStep,
-			this->makeBicycle(), this->getBicycleTag(),
+			bicycle, tag,
 			this->observers);
 		if (!this->filename.empty()) {
-			return std::make_shared<FileSimulationWrap>(ret, this->filename.c_str());
+			SimPtr filesimptr = std::make_shared<FileSimulationWrap>(ret, this->filename.c_str());
+			if (this->dual) {
+				SimPtr ret2 = std::make_shared<Simulation>(0.05f,
+					this->angleStep,
+					this->speedStep,
+					bicycle, tag,
+					this->observers);
+
+				SimPtr dualptr = std::make_shared<DualSimulation>(filesimptr, ret2);
+				return dualptr;
+			}
+			return filesimptr;
 		}
+
 		return ret;
 	}
 };
@@ -546,6 +573,7 @@ public:
 
 	void loop()
 	{
+		bool dual = true;
 		char c;
 		SimObserverPtr obs = 
 			std::static_pointer_cast<SimulationObserver>(this->shared_from_this());
@@ -591,6 +619,19 @@ public:
 				break;
 			case 'e':
 				break;
+			case 'f':
+				if (dual) {
+					DualSimulation *dualptr = dynamic_cast<DualSimulation*>(sim->getDecorated().get());
+					assert(dualptr != nullptr);
+					int res = dualptr->flip();
+					assert(res >= 0 && res <= 1);
+					const char *info[] = {
+						"Flipped to FileSim.",
+						"Flipped to Sim",
+					};
+					std::cout << info[res] << std::endl;
+				}
+				break;
 			case 'q':
 			default:
 				quit = true;
@@ -602,7 +643,9 @@ public:
 int main(int argc, char *argv[])
 {
 	bool glfw = false;
-	
+	std::condition_variable var;
+	std::mutex mut;
+//	CondVarObserver obs(var);
 	// Simulation sim(10.0f, 2.0f, 0.1f, 10.0);
 	SimObserverPtr simLogPtr = std::make_shared<InfoLog>();
 	SimulationBuilder builder;
@@ -611,7 +654,10 @@ int main(int argc, char *argv[])
 		.setBicycleType(SimulationBuilder::Type_Lengthy)
 		.setSimulationAngleStep(2.0)
 		.setSimulationSpeedStep(10.0);
-	
+
+	builder.setDual(true)
+		.setFilename("sample.dat");
+
 	// after this line the object 'build' is not valid.
 	std::shared_ptr<SimulationLightBuilder> b = std::shared_ptr<SimulationBuilder>(&builder);
 #ifdef _MSC_VER
@@ -633,6 +679,5 @@ int main(int argc, char *argv[])
 	assert(_CrtCheckMemory() != 0);
 #endif
 	ui->loop();
-
 	return 0;
 }

@@ -1,8 +1,10 @@
 /** @file Units.h Contains some typedefs for units.
 */
 #pragma once
+
 typedef float TimeUnit;
 typedef TimeUnit Time;
+
 #ifdef _DEBUG
 #include <assert.h>
 #else

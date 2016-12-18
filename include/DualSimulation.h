@@ -16,7 +16,7 @@ public:
 		second(second)
 	{}
 
-	int flip()
+	virtual int flip()
 	{
 		decorated.swap(second);
 		flipped = !flipped;
