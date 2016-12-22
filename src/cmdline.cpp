@@ -1,19 +1,19 @@
 /* @file cmdline.cpp Contains command line parse logic.
-*
-*/
+ *
+ */
 #include <string>
 
 /** @brief Contains an interface for command line parameter handler.
-*
-*/
+ *
+ */
 class ProgramParameterInterface {
 public:
 	virtual const std::string &name() const = 0;
 	virtual const std::string &value() const = 0;
 
 	/** @note You should use a hook in derived classes if you need a param
-	* of non-string type.
-	*/
+	 * of non-string type.
+	 */
 	virtual void setValue(const std::string &val) = 0;
 	virtual ~ProgramParameterInterface() {}
 };
@@ -36,7 +36,7 @@ public:
 	}
 
 
-	virtual void commandLineParamHandler(const std::string &param) = 0;
+	virtual void commandLineParamHandler(const std::string &param) override = 0;
 
 	virtual const std::string & name() const override
 	{
@@ -44,7 +44,7 @@ public:
 	}
 
 
-	virtual const std::string & value() const
+	virtual const std::string & value() const override
 	{
 		static const std::string s = "";
 		return s;

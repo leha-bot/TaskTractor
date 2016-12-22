@@ -370,34 +370,34 @@ public:
 	{
 	}
 
-	void advance()
+	void advance() override
 	{
 		advance(stepTime);
 	}
 
-	void advance(const Time &step)
+	void advance(const Time &step) override
 	{
 		simulated->advance(step);
 		simulationTime += step;
 		observers.notify(simulated, name, simulationTime, step);
 	}
 
-	void turnLeft()
+	void turnLeft() override
 	{
 		simulated->modifyFrontWheelRotation(stepAngle);
 	}
 
-	void turnRight()
+	void turnRight() override
 	{
 		simulated->modifyFrontWheelRotation(-stepAngle);
 	}
 
-	void accelerate()
+	void accelerate() override
 	{
 		simulated->modifySpeed(stepSpeed);
 	}
 
-	void deccelerate()
+	void deccelerate() override
 	{
 		simulated->modifySpeed(-stepSpeed);
 	}
@@ -584,8 +584,6 @@ public std::enable_shared_from_this<ConsoleSimulationUi> {
 	std::shared_ptr<SimulationBuilder> builder;
 	// std::condition_variable var;
 	bool quit;
-	bool speedChangeEnabled;
-	bool angleChangeEnabled;
 	ConstraintUnit <BicycleInterface::CoordUnit> speedConstraints;
 	ConstraintUnit <BicycleInterface::AngleDegrees> angleConstraints;
 	
