@@ -1,4 +1,4 @@
-/** @file FileSimulation.h Contains a class interface for file-driven 
+/** @file FileSimulationWrap.h Contains a class interface for file-driven 
  *   simulation.
  */
 #include "SimulationInterface.h"
@@ -10,7 +10,8 @@
 #include <string>
 #include <iosfwd>
 #include <sstream>
-#include <chrono>
+#include <ratio>
+// #include <chrono>
 
 /** @brief Convert units using the next formula: to = from / Ratio::num * Ratio::den;
  *         (Ratio::num is the numerator, Ratio::den is the denominator).
@@ -19,7 +20,7 @@
           T1 and T2 is same and Ratio::num == Ratio::den
  */
 template < typename T1, typename T2, typename Ratio,
-	typename = std::enable_if < (!std::is_same<T1, T2>::value
+	typename = typename std::enable_if < (!std::is_same<T1, T2>::value
 	|| Ratio::num != Ratio::den)
 	&& Ratio::num != 0 && Ratio::den != 0> ::type >
 void convert_units(const T1 &from, T2 &to)
@@ -27,14 +28,8 @@ void convert_units(const T1 &from, T2 &to)
 	to = from / (T1) Ratio::num * Ratio::den;
 }
 
-/* @brief template specialization for convert_units which converts unsigned long ms to Time.
-template<>
-void convert_units<unsigned long, Time, >(const unsigned long &from, Time &to)
-{
-	to = from / 1000.0;
-}
-*/
-
+/** @brief Add a file reading for the SimulationInterface.
+ */
 class FileSimulationWrap : public SimulationDecoratorBase {
 	std::fstream fs;
 	std::stringstream str;
@@ -65,7 +60,7 @@ class FileSimulationWrap : public SimulationDecoratorBase {
 		
 		str >> ms;
 
-		// convert msecs to secs.
+		// convert msecs to secs (note: there are precision bug)
 		convert_units<unsigned long, Time, std::kilo>(ms, time_tmp);
 
 		lastTime = simTime;
@@ -84,8 +79,10 @@ class FileSimulationWrap : public SimulationDecoratorBase {
 		// unused
 		str >> tmp;
 		str >> tmp;
+
+		// vehicle rotation
 		str >> tmp;
-		bicycle->setFrontWheelRotation(tmp);
+		bicycle->setVehicleRotation(tmp);
 		// ignore last 2 floats.
 		str >> tmp;
 		str >> tmp;

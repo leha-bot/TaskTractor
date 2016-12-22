@@ -9,7 +9,9 @@
 
 // forward declaration for typedef.
 class SimulationInterface;
+class SimulationObserver;
 
+typedef std::shared_ptr<SimulationObserver> SimObserverPtr;
 typedef std::shared_ptr<SimulationInterface> SimPtr;
 typedef std::shared_ptr<BicycleInterface> BicyclePtr;
 
@@ -50,8 +52,8 @@ public:
 		const char *tag, const Time &simTime, const Time &delta) = 0;
 };
 
-typedef std::shared_ptr<SimulationObserver> SimObserverPtr;
-
+/** @brief A simple single-threaded Observer s group.
+ */
 class SimulationObserverGroup : public SimulationObserver {
 	std::list<SimObserverPtr> observers;
 
@@ -77,8 +79,8 @@ public:
 };
 
 /** @brief The base class for different UI implementations.
-*
-*/
+ *
+ */
 class SimulationUi : public SimulationObserver,
 	public std::enable_shared_from_this<SimulationUi> {
 
@@ -90,8 +92,8 @@ public:
 };
 
 /** @brief A lightweight Builder interface for minimizing dependencies.
-*         Extracted from class SimulationBuilder.
-*/
+ *         Extracted from class SimulationBuilder.
+ */
 class SimulationLightBuilder {
 public:
 	virtual void addObserver(SimObserverPtr &ptr) = 0;

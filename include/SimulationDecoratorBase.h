@@ -1,4 +1,4 @@
-/** @file SimulationVoidDecorator.h Contains a generic class-router for 
+/** @file SimulationDecoratorBase.h Contains a generic class-router for 
  *        implementing custom Decorators.
  */
 #pragma once

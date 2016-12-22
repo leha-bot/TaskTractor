@@ -1,7 +1,42 @@
 /** @file main.cpp Contains entry point for Tractor Simulation program using 
  *  the Kinematic Bicycle Model.
  *  
- * @mainpage Brief contents:
+ * @mainpage
+ * # Compiling
+ * 
+ * ## Windows
+ * Use the MS Visual Studio 2013 and compile the solution TaskTractor.sln;
+ * If the Visual Studio 2013 is not installed, you can download the Visual Studio
+ * Build Tools from site: https://www.microsoft.com/ru-ru/download/details.aspx?id=40760
+ *
+ * ## Linux
+ * 
+ * Make sure that you have the GCC and Make utilities and have required libraries.
+ * There are some errors with multithreading
+ * (see https://bugs.launchpad.net/ubuntu/+source/gcc-defaults/+bug/1228201)
+ *
+ * Brief contents:
+ * This is a simple project which demonstrates the physical simulation based on
+ * the article "Automatic Steering Methods for Autonomous Automobile Path Tracking".
+ * 
+ * LIMITATIONS
+ * ===========
+ * - The simulation is single-threaded (except the decorated InfoLog which checked only on Windows);
+ * - The simulation did not implement the units conversion (but we 
+ *   can simply changes the template parameter types to anothers);
+ * - The simulation did not use the considered SMat.h (but also we can 
+ *   change the default template argument);
+ * - There are some plans for implementing GLFW GUI and some helper toolbars,
+ *   but they didn't implemented (there are GLFW stubs);
+ * - The simulation is command-line-based and works in step mode. You input the
+ *   character (and press ENTER) or character string, the simulation will
+ *   process it and you can input the another command (or q to quit);
+ * - There are some plans to implement the command-line arguments parsing based
+ *   on my old modified classes, but it didn't implemented yet;
+ * - There are plans for cleaning, refactoring, documenting and moving all 
+ *   classes to another modules from main.cpp.
+ * - Implement Android bridge for GLFW and NativeActivity and push it to
+ *   upstream (glfw.org);
  *
  * SIMULATION MODEL
  * ================
@@ -12,6 +47,7 @@
  * BicycleT<typename CoordUnitT, typename TimeUnitT, typename AngleDegreesT>, 
  * located in file BicycleInterface.h. We use template parameters for the 
  * ability to switch to another units with another semantics.
+ *
  * SIMULATION CONTROLLER
  * =====================
  * This is a class Simulation, which encapsulates the simulated bicycle model and
@@ -20,12 +56,25 @@
  * Creating an instance of Simulation Controller
  * ---------------------------------------------
  * The Simulation instance is built via SimulationBuilder
- * interface which have chained setter methods and abstract method 
+ * interface which have chained setter methods and method 
  * build(ObserverPtr uiView). The ObserverPtr is the 
  * std::shared_ptr<SimulationObserver> which is notified by the controller if
  * the simulation has been advanced. These ObserverPtr's are stored in the 
  * class ObserverGroup which is derived from Observer and it notifies all its 
  * children (a typical Composite Design Pattern implementation).
+ *
+ * ### Multi-threading Observer
+ * There is an experimental multi-threaded decorator for SimulationObserver 
+ * which runs its
+ * private method run() in separate std::thread and its method is waiting for 
+ * the std::conditional_variable. While the master object (i.e. Simulation)
+ * calls SimulationObserver::notify, this class sets the special guarding flag,
+ * copying references for all arguments and calls method notify_one() of 
+ * its conditional variable. This variable wakes up the sleeping thread and 
+ * it checks flag, and if it is true, then calls method notify() of the 
+ * decorated interface with stored args. Note that this class is designed for
+ * queue-based queries. If the main thread calls notify() for this thread twice
+ * and thread did not finish its work, then will be a race condition.
  *
  * Simulation controller logic
  * ---------------------------
@@ -61,6 +110,7 @@
  * + w, s - increase/decrease speed;
  * + a, d - turn left/right;
  * + e - advance simulation;
+ * + f - toggle file / simulation mode;
  * + q - quit.
  */
 #include "SimulationInterface.h"
@@ -78,7 +128,7 @@
 #include <condition_variable>
 #include <assert.h>
 #include <ratio>
-#include "..\include\DualSimulation.h"
+#include "DualSimulation.h"
 
 template<typename T>
 void fix_eps(T &t)
@@ -211,7 +261,7 @@ public:
 		return getFrontWheelRotation();
 	}
 
-	virtual void setBackWheelRotation(const AngleDegrees &units) override
+	virtual void setVehicleRotation(const AngleDegrees &units) override
 	{
 		setFrontWheelRotation(units);
 	}
@@ -250,7 +300,7 @@ public:
 	{
 		float speed = getSpeed();
 		float angle_fr = getFrontWheelRotationRads();
-		float angle_deg = getFrontWheelRotation();
+		// float angle_deg = getFrontWheelRotation();
 		float ds = speed * units;
 
 		position.x += ds * cos(vehicle_angle_rads);
@@ -269,11 +319,15 @@ public:
 		return rads_to_degs(vehicle_angle_rads);
 	}
 
+	virtual void setVehicleRotation(const AngleDegrees &units) override
+	{
+		vehicle_angle_rads = degs_to_rads(units);
+	}
+
 };
 
 class InfoLog : public SimulationObserver {
 public:
-	void log();
 
 	virtual void notify(const std::shared_ptr<BicycleInterface> &sim,
 		const char *tag, const Time &simTime, const Time &delta) override
@@ -375,9 +429,9 @@ protected:
 };
 
 /** @brief Constructs instances of SimulationInterface (defined by parameters
-*          and BicycleInterface (defined by private member
-*          SimulationBuilder::BicycleType 's value.
-*/
+ *         and BicycleInterface (defined by private member
+ *         SimulationBuilder::BicycleType 's value.
+ */
 class SimulationBuilder : public SimulationLightBuilder {
 public:
 	typedef BicycleInterface::CoordUnit CoordUnit;
@@ -442,8 +496,8 @@ public:
 	}
 
 	/** @note This method has been added for enabling the chained calls.
-	*
-	*/
+	 *
+	 */
 	SimulationBuilder &addSimulationObserver(SimObserverPtr &ptr)
 	{
 		this->observers.add(ptr);
@@ -457,8 +511,8 @@ public:
 	}
 
 	/** @brief Sets the dual decorators mode.
-	* @see DualSimulation.
-	*/
+	 *  @see DualSimulation.
+	 */
 	SimulationBuilder &setDual(bool dual)
 	{
 		this->dual = dual;
@@ -515,6 +569,13 @@ public:
 	}
 };
 
+void check_mem()
+{
+#ifdef _MSC_VER
+	assert(_CrtCheckMemory());
+#endif
+}
+
 /** @brief The simple Console interface. It works on all platforms supporting the stdlibc++.
  */
 class ConsoleSimulationUi : public SimulationObserver,
@@ -530,6 +591,9 @@ public std::enable_shared_from_this<ConsoleSimulationUi> {
 	
 	template <typename T>
 	class ConstraintsHandler : public SimulationWithHandlers::Handler<T> {
+		
+		typedef typename SimulationWithHandlers::Handler<T>::Unit Unit;
+		
 		const ConstraintUnit<Unit> &u;
 	public:
 		ConstraintsHandler(const ConstraintUnit<Unit> &u)
@@ -537,7 +601,8 @@ public std::enable_shared_from_this<ConsoleSimulationUi> {
 		{
 		}
 
-		bool handle(const Unit &oldValue, const Unit &delta, Unit &newValue, bool &notify) override
+		bool handle(const Unit &oldValue, const Unit &delta,
+			Unit &newValue, bool &notify) override
 		{
 			notify = false;
 			int rng = u.in_range(newValue);
@@ -581,25 +646,27 @@ public:
 		std::cout << "ConsoleUi usage: \n w<Enter> - accelerate;\n"
 			" s<Enter> - deccelerate;\n a<Enter> - turn left;\n"
 			" d<Enter> - turn right;\n e<Enter> - advance;\n"
+			" f<Enter> - toggle the file / simulation mode;\n"
 			" q<Enter> - quit. You can also input an control "
 			"string like \"wwwwwwwaaaaasssssddd\" - it will be a "
 			"correct commands sequence." << std::endl;
 		
-		sim = std::make_shared<SimulationWithHandlers>(builder->buildSimulation(obs));
+		std::cout << "Now we are using a file simulation." << std::endl;
+		
+		builder->addObserver(obs);
+
+		auto p = builder->build();
+		sim = std::make_shared<SimulationWithHandlers>(p);
 		
 		typedef ConstraintsHandler<SimulationInterface::Speed> SpHdnl;
 		typedef ConstraintsHandler<SimulationInterface::AngleDegrees> AnglHndl;
-		/*SpHdnl spHndl(speedConstraints);
-		AnglHndl anglHndl(angleConstraints);
-		*/// std::shared_ptr<
+		
 		std::shared_ptr<SimulationWithHandlers::SpeedHandler> spptr = std::make_shared<SpHdnl>(speedConstraints);
-		assert(_CrtCheckMemory() != 0);
+		
 		std::shared_ptr<SimulationWithHandlers::AngleHandler> anptr = std::make_shared<AnglHndl>(angleConstraints);
-		assert(_CrtCheckMemory() != 0);
+		
 		sim->setAngleChangeHandler(anptr);
 		sim->setSpeedChangeHandler(spptr);
-
-		// sim = std::shared_ptr<SimulationInterface>(new SimulationWithHandlers(builder->buildSimulation(obs)));
 
 		while (!quit) {
 			sim->advance();
@@ -640,26 +707,123 @@ public:
 	}
 };
 
+#include <thread>
+
+/** @brief Encapsulates Observer's logic in separate thread.
+ */
+class ThreadedObserverDecorator : public SimulationObserver {
+	std::thread t;
+	std::mutex m;
+	std::condition_variable var;
+	SimObserverPtr sim;
+	bool need_exit;
+	bool notified;
+
+	const BicyclePtr *byc;
+	const char *tag;
+	const Time *simTime;
+	const Time *delta;
+
+	// private functions.
+	void run()
+	{
+		std::unique_lock<std::mutex> lk(m);
+		while (!need_exit)
+		{
+			var.wait(lk);
+			if (!notified) {
+				continue;
+			}
+			sim->notify(*byc, tag, *simTime, *delta);
+		}
+	}
+
+	/** @note This method is not thread-safe.
+	 */
+	void setArgs(const BicyclePtr &sim, const char *tag,
+		const Time &simTime, const Time &delta)
+	{
+		byc = &sim;
+		this->tag = tag;
+		this->simTime = &simTime;
+		this->delta = &delta;
+	}
+
+public:
+	ThreadedObserverDecorator(SimObserverPtr sim)
+		:
+		sim(sim), need_exit(0),
+		notified(0),
+		byc(nullptr), tag(nullptr),
+		simTime(nullptr), delta(nullptr)
+	{
+		t = std::thread(&ThreadedObserverDecorator::run, this);
+	}
+
+	virtual void notify(const BicyclePtr &sim, const char *tag,
+		const Time &simTime, const Time &delta) override
+	{
+		setArgs(sim, tag, simTime, delta);
+		notified = true;
+		var.notify_one();
+	}
+
+	/** @brief Signals the worker thread that we need to exit. */
+	void needToExit()
+	{
+		need_exit = true;
+		var.notify_one();
+	}
+
+	~ThreadedObserverDecorator()
+	{
+		needToExit();
+		if (t.joinable())
+		{
+			t.join();
+		}
+	}
+};
+
 int main(int argc, char *argv[])
 {
+
+	// control flags
+#ifdef _MSC_VER
 	bool glfw = false;
-	std::condition_variable var;
-	std::mutex mut;
-//	CondVarObserver obs(var);
-	// Simulation sim(10.0f, 2.0f, 0.1f, 10.0);
+	bool mt = false;
+#else 
+	bool mt = false;
+#endif
 	SimObserverPtr simLogPtr = std::make_shared<InfoLog>();
+
+	if (mt) {
+		try {
+			// can throw.
+			SimObserverPtr simMtLogPtr =
+				std::make_shared<ThreadedObserverDecorator>(simLogPtr);
+			simLogPtr = simMtLogPtr;
+
+		} catch (std::system_error &e) {
+			mt = false;
+			std::cerr << "Catched std::system_error. what()" << e.what() <<
+				"Multithreading Disabled." << std::endl;
+		}
+	}
+
 	SimulationBuilder builder;
 	builder.addSimulationObserver(simLogPtr)
 		.setBicycleLength(10.0)
 		.setBicycleType(SimulationBuilder::Type_Lengthy)
 		.setSimulationAngleStep(2.0)
 		.setSimulationSpeedStep(10.0);
-
+	
 	builder.setDual(true)
 		.setFilename("sample.dat");
 
-	// after this line the object 'build' is not valid.
-	std::shared_ptr<SimulationLightBuilder> b = std::shared_ptr<SimulationBuilder>(&builder);
+	// after this line the object 'build' is not valid (rvalue refs)
+	std::shared_ptr<SimulationLightBuilder> b = 
+		std::shared_ptr<SimulationBuilder>(&builder);
 #ifdef _MSC_VER
 	if (glfw) {
 		std::shared_ptr<SimulationUi> getGlfwUI(std::shared_ptr<SimulationLightBuilder> &ptr);

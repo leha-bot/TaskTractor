@@ -71,8 +71,8 @@ public:
 
 	void clamp(T &val) const
 	{
-		val = val > maxval ? maxval :
-			val < minval ? minval : val;
+		val = val > maxv ? maxv :
+			val < minv ? minv : val;
 	}
 
 	crefT clamp()
